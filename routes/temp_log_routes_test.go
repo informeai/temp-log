@@ -27,3 +27,11 @@ func TestPostLogs(t *testing.T) {
 		t.Errorf("TestPostLogs: got: %s -> expect: == nil\n", err.Error())
 	}
 }
+
+//go test -run ^TestAuth
+func TestAuth(t *testing.T) {
+	r := NewRouter()
+	if err := r.auth(); err != nil {
+		t.Errorf("TestAuth: got: %s -> expect: == nil\n", err.Error())
+	}
+}
