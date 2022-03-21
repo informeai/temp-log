@@ -28,6 +28,6 @@ func (t TransformLog) Transform(log *dto.Log) (TransformLog, error) {
 		t.Message = fmt.Sprintf("[%v]:[%s]:[%s] %s", time.Now().UTC().Format(time.RFC3339), strings.ToUpper(log.Project), strings.ToUpper(log.Type), log.Message)
 		return t, nil
 	}
-	t.Message = fmt.Sprintf("[%v]:[%s]:[DEFAULT] %s", time.Now().UTC().Format(time.RFC3339), strings.ToUpper(log.Type), log.Message)
+	t.Message = fmt.Sprintf("[%v]:[DEFAULT]:[%s] %s", time.Now().UTC().Format(time.RFC3339), strings.ToUpper(log.Type), log.Message)
 	return t, nil
 }
