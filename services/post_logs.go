@@ -24,6 +24,10 @@ func (t TransformLog) Transform(log *dto.Log) (TransformLog, error) {
 	if len(log.Type) < 3 || len(log.Message) < 5 {
 		return TransformLog{}, errors.New("length of type or message not permited")
 	}
-	t.Message = fmt.Sprintf("[%v]:[%s]: %s", time.Now().UTC().Format(time.RFC3339), strings.ToUpper(log.Type), log.Message)
+	if len(log.Project) > 1 {
+		t.Message = fmt.Sprintf("[%v]:[%s]:[%s] %s", time.Now().UTC().Format(time.RFC3339), strings.ToUpper(log.Project), strings.ToUpper(log.Type), log.Message)
+		return t, nil
+	}
+	t.Message = fmt.Sprintf("[%v]:[%s]:[DEFAULT] %s", time.Now().UTC().Format(time.RFC3339), strings.ToUpper(log.Type), log.Message)
 	return t, nil
 }
