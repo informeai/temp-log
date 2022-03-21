@@ -2,7 +2,6 @@ package routes
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -26,8 +25,10 @@ func NewRouter() *Routers {
 func (ro *Routers) health() error {
 	var e error = nil
 	ro.Mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		_, err := w.Write([]byte("{'ok':'true'}"))
-		if err != nil {
+		result := struct {
+			Ok bool `json:"ok"`
+		}{Ok: true}
+		if err := json.NewEncoder(w).Encode(result); err != nil {
 			e = err
 		}
 	})
@@ -41,30 +42,46 @@ func (ro *Routers) auth() error {
 		body := r.Body
 		defer r.Body.Close()
 		var dtoAuth dto.Auth
+		var resultError struct {
+			Error string `json:"error"`
+		}
 		err := json.NewDecoder(body).Decode(&dtoAuth)
 		if err != nil {
 			e = err
 			w.WriteHeader(400)
-			w.Write([]byte(fmt.Sprintf("{error: %s}", err.Error())))
+			resultError.Error = err.Error()
+			if err = json.NewEncoder(w).Encode(resultError); err != nil {
+				e = err
+			}
 			return
 		}
 		err = services.VerifyEmail(dtoAuth.Email)
 		if err != nil {
 			e = err
 			w.WriteHeader(400)
-			w.Write([]byte(fmt.Sprintf("{error: %s}", err.Error())))
+			resultError.Error = err.Error()
+			if err = json.NewEncoder(w).Encode(resultError); err != nil {
+				e = err
+			}
 			return
 		}
 		token, err := services.CreateJWT(dtoAuth.Email)
 		if err != nil {
 			e = err
 			w.WriteHeader(400)
-			w.Write([]byte(fmt.Sprintf("{error: %s}", err.Error())))
+			resultError.Error = err.Error()
+			if err = json.NewEncoder(w).Encode(resultError); err != nil {
+				e = err
+			}
 			return
 		}
-
+		result := struct {
+			Token string `json:"token"`
+		}{Token: token}
 		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte(fmt.Sprintf("{'token': %s}", token)))
+		if err = json.NewEncoder(w).Encode(result); err != nil {
+			e = err
+		}
 		return
 	}).Methods("POST")
 	return e
@@ -74,19 +91,27 @@ func (ro *Routers) auth() error {
 func (ro *Routers) postLogs() error {
 	var e error = nil
 	ro.Mux.HandleFunc("/logs", func(w http.ResponseWriter, r *http.Request) {
+		var resultError struct {
+			Error string `json:"error"`
+		}
 		if _, ok := r.Header["Authorization"]; !ok {
 			w.WriteHeader(401)
-			w.Write([]byte(fmt.Sprint("{error: unauthorized}")))
+			resultError.Error = "unauthorized"
+			if err := json.NewEncoder(w).Encode(resultError); err != nil {
+				e = err
+			}
 			return
 		}
 		authorization := r.Header.Get("Authorization")
 		payload, err := services.VerifyJWT(authorization)
 		if err != nil {
 			w.WriteHeader(401)
-			w.Write([]byte(fmt.Sprintf("{error: %s}", err.Error())))
+			resultError.Error = err.Error()
+			if err = json.NewEncoder(w).Encode(resultError); err != nil {
+				e = err
+			}
 			return
 		}
-		fmt.Printf("payload: %+s\n", payload)
 		body := r.Body
 		defer r.Body.Close()
 		var dtoLog dto.Log
@@ -95,20 +120,34 @@ func (ro *Routers) postLogs() error {
 		if err != nil {
 			e = err
 			w.WriteHeader(400)
-			w.Write([]byte(fmt.Sprintf("{error: %s}", err.Error())))
+			resultError.Error = err.Error()
+			if err = json.NewEncoder(w).Encode(resultError); err != nil {
+				e = err
+			}
 			return
 		}
 		transf, err := transformLog.Transform(&dtoLog)
 		if err != nil {
 			e = err
 			w.WriteHeader(400)
-			w.Write([]byte(fmt.Sprintf("{error: %s}", err.Error())))
+			resultError.Error = err.Error()
+			if err = json.NewEncoder(w).Encode(resultError); err != nil {
+				e = err
+			}
 			return
 		}
 
 		ro.Db[payload.Email] = append(ro.Db[payload.Email], transf.Message)
+		if len(ro.Db[payload.Email]) > 20 {
+			ro.Db[payload.Email] = ro.Db[payload.Email][1:len(ro.Db[payload.Email])]
+		}
 		w.WriteHeader(201)
-		w.Write([]byte("{status: created}"))
+		result := struct {
+			Status string `json:"status"`
+		}{Status: "created"}
+		if err = json.NewEncoder(w).Encode(result); err != nil {
+			e = err
+		}
 		return
 	}).Methods("POST")
 	return e
@@ -118,29 +157,35 @@ func (ro *Routers) postLogs() error {
 func (ro *Routers) getLogs() error {
 	var e error = nil
 	ro.Mux.HandleFunc("/logs", func(w http.ResponseWriter, r *http.Request) {
+		var resultError struct {
+			Error string `json:"error"`
+		}
 		if _, ok := r.Header["Authorization"]; !ok {
 			w.WriteHeader(401)
-			w.Write([]byte(fmt.Sprint("{error: unauthorized}")))
+			resultError.Error = "unauthorized"
+			if err := json.NewEncoder(w).Encode(resultError); err != nil {
+				e = err
+			}
 			return
 		}
 		authorization := r.Header.Get("Authorization")
 		payload, err := services.VerifyJWT(authorization)
 		if err != nil {
 			w.WriteHeader(401)
-			w.Write([]byte(fmt.Sprintf("{error: %s}", err.Error())))
+			resultError.Error = err.Error()
+			if err = json.NewEncoder(w).Encode(resultError); err != nil {
+				e = err
+			}
 			return
 		}
-		fmt.Printf("payload: %+s\n", payload)
 
-		mockBytes, err := json.Marshal(ro.Db[payload.Email])
-		if err != nil {
-			e = err
-			w.WriteHeader(400)
-			w.Write([]byte(fmt.Sprintf("{error: %s}", err.Error())))
-			return
-		}
+		result := struct {
+			Data []string `json:"data"`
+		}{Data: ro.Db[payload.Email]}
 		w.WriteHeader(http.StatusAccepted)
-		w.Write(mockBytes)
+		if err = json.NewEncoder(w).Encode(result); err != nil {
+			e = err
+		}
 		return
 	}).Methods("GET")
 	return e
